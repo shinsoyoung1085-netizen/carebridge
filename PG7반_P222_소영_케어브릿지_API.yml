@@ -1,0 +1,787 @@
+openapi: 3.0.3
+info:
+  title: 케어브릿지 (CareBridge) API
+  description: 장기요양기관 실무자 원격 업무지원 매칭 플랫폼 API 명세
+  version: 1.0.0
+servers:
+  - url: https://api.carebridge.io/v1
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Categories
+  - name: Cases
+  - name: Matches
+  - name: Sessions
+  - name: Solutions
+  - name: Admin
+
+paths:
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: 회원가입
+      description: |
+        - 요구사항: REQ-FUNC-001
+        - 화면: SCR-AUTH-001
+        - 테이블: users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string, example: "박민지" }
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                role: { type: string, enum: [staff, expert] }
+                org_id: { type: integer, nullable: true }
+      responses:
+        '201':
+          description: 가입 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: 로그인
+      description: |
+        - 요구사항: REQ-FUNC-002
+        - 화면: SCR-AUTH-001
+        - 테이블: users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users/me:
+    get:
+      tags: [Users]
+      summary: 내 프로필 조회
+      description: |
+        - 요구사항: REQ-FUNC-002
+        - 화면: SCR-MY-001
+        - 테이블: users
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Users]
+      summary: 내 프로필 수정
+      description: |
+        - 요구사항: REQ-FUNC-002
+        - 화면: SCR-MY-001
+        - 테이블: users, expert_profiles, expert_categories
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                phone: { type: string }
+                bio: { type: string, description: "숙련자 전용" }
+                category_ids:
+                  type: array
+                  items: { type: integer }
+                  description: "숙련자 전문분야"
+      responses:
+        '200':
+          description: 수정 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /users/me/cases:
+    get:
+      tags: [Users]
+      summary: 내 케이스/활동 이력 조회
+      description: |
+        - 요구사항: REQ-FUNC-009
+        - 화면: SCR-MY-001
+        - 테이블: cases, matches
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Case' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: 카테고리 목록 조회
+      description: |
+        - 요구사항: REQ-FUNC-003, REQ-FUNC-013
+        - 화면: SCR-CASE-001, SCR-ADMIN-001
+        - 테이블: categories
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+
+  /cases:
+    post:
+      tags: [Cases]
+      summary: 케이스(문제) 등록
+      description: |
+        - 요구사항: REQ-FUNC-003
+        - 화면: SCR-CASE-001
+        - 테이블: cases
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, title, description]
+              properties:
+                category_id: { type: integer }
+                title: { type: string, maxLength: 100 }
+                description: { type: string, maxLength: 2000 }
+      responses:
+        '201':
+          description: 등록 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Case' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    get:
+      tags: [Cases]
+      summary: 케이스 목록 조회
+      description: |
+        - 요구사항: REQ-FUNC-003
+        - 화면: SCR-MAIN-001
+        - 테이블: cases
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+        - name: category_id
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Case' }
+
+  /cases/{caseId}:
+    get:
+      tags: [Cases]
+      summary: 케이스 상세 조회
+      description: |
+        - 요구사항: REQ-FUNC-004
+        - 화면: SCR-CASE-002
+        - 테이블: cases, attachments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Case' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Cases]
+      summary: 케이스 수정
+      description: |
+        - 요구사항: REQ-FUNC-003
+        - 화면: SCR-CASE-002
+        - 테이블: cases
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+      responses:
+        '200':
+          description: 수정 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Case' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/attachments:
+    post:
+      tags: [Cases]
+      summary: 케이스 첨부사진 업로드
+      description: |
+        - 요구사항: REQ-FUNC-014
+        - 화면: SCR-CASE-001
+        - 테이블: attachments
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items: { type: string, format: binary }
+                  maxItems: 5
+      responses:
+        '201':
+          description: 업로드 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Attachment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/matches:
+    post:
+      tags: [Matches]
+      summary: 숙련자 매칭 요청
+      description: |
+        - 요구사항: REQ-FUNC-005
+        - 화면: SCR-CASE-002
+        - 테이블: matches
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '201':
+          description: 매칭 요청 생성
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 이미 매칭이 진행 중인 케이스
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    get:
+      tags: [Matches]
+      summary: 케이스별 매칭 이력 조회
+      description: |
+        - 요구사항: REQ-FUNC-005
+        - 화면: SCR-CASE-002
+        - 테이블: matches
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Match' }
+
+  /matches/{matchId}:
+    put:
+      tags: [Matches]
+      summary: 매칭 요청 수락/거절 (숙련자)
+      description: |
+        - 요구사항: REQ-FUNC-006
+        - 화면: SCR-MATCH-001
+        - 테이블: matches, consult_sessions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [수락, 거절] }
+      responses:
+        '200':
+          description: 처리 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Match' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 이미 처리된 요청
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /matches/{matchId}/sessions:
+    post:
+      tags: [Sessions]
+      summary: 상담 세션 생성
+      description: |
+        - 요구사항: REQ-FUNC-007
+        - 화면: SCR-SESSION-001
+        - 테이블: consult_sessions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '201':
+          description: 세션 생성 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sessions/{sessionId}:
+    get:
+      tags: [Sessions]
+      summary: 세션 상세 조회
+      description: |
+        - 요구사항: REQ-FUNC-007
+        - 화면: SCR-SESSION-001
+        - 테이블: consult_sessions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Sessions]
+      summary: 세션 상태 변경 (원격지원 도구·접속코드 등록/시작/종료)
+      description: |
+        - 요구사항: REQ-FUNC-007
+        - 화면: SCR-SESSION-001
+        - 테이블: consult_sessions, cases
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                remote_tool: { type: string, enum: [이지헬프, AnyDesk, Zoom, 기타] }
+                access_code: { type: string, maxLength: 20 }
+                status: { type: string, enum: [진행중, 완료, 취소] }
+                memo: { type: string }
+      responses:
+        '200':
+          description: 수정 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '400':
+          description: 원격지원 도구·접속코드 미입력 상태로 시작 시도
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sessions/{sessionId}/reviews:
+    post:
+      tags: [Sessions]
+      summary: 세션 평가 등록 (기관담당자)
+      description: |
+        - 요구사항: REQ-FUNC-008
+        - 화면: SCR-SESSION-001
+        - 테이블: reviews, cases
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: 평가 등록 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Review' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /solutions:
+    get:
+      tags: [Solutions]
+      summary: 사례 아카이브 검색
+      description: |
+        - 요구사항: REQ-FUNC-010
+        - 화면: SCR-ARCHIVE-001, SCR-CASE-002
+        - 테이블: solution_archive
+      parameters:
+        - name: category_id
+          in: query
+          schema: { type: integer }
+        - name: keyword
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Solution' }
+
+  /solutions/{solutionId}:
+    get:
+      tags: [Solutions]
+      summary: 사례 상세 조회
+      description: |
+        - 요구사항: REQ-FUNC-010
+        - 화면: SCR-ARCHIVE-001
+        - 테이블: solution_archive
+      parameters:
+        - name: solutionId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Solution' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /cases/{caseId}/solutions:
+    post:
+      tags: [Solutions]
+      summary: 해결 사례 등록 (숙련자)
+      description: |
+        - 요구사항: REQ-FUNC-009
+        - 화면: SCR-MY-001
+        - 테이블: solution_archive
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title: { type: string, maxLength: 100 }
+                content: { type: string }
+      responses:
+        '201':
+          description: 등록 성공 (관리자 승인 대기 상태로 생성)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Solution' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      summary: 전체 회원 조회 (관리자)
+      description: |
+        - 요구사항: REQ-FUNC-012
+        - 화면: SCR-ADMIN-001
+        - 테이블: users
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/users/{userId}/status:
+    put:
+      tags: [Admin]
+      summary: 회원 상태 변경 (활성/정지)
+      description: |
+        - 요구사항: REQ-FUNC-012
+        - 화면: SCR-ADMIN-001
+        - 테이블: users
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, suspended] }
+      responses:
+        '200':
+          description: 변경 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/categories:
+    post:
+      tags: [Admin]
+      summary: 카테고리 등록 (관리자)
+      description: |
+        - 요구사항: REQ-FUNC-013
+        - 화면: SCR-ADMIN-001
+        - 테이블: categories
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 50 }
+                description: { type: string, maxLength: 200 }
+      responses:
+        '201':
+          description: 등록 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/solutions/{solutionId}/publish:
+    put:
+      tags: [Admin]
+      summary: 사례 아카이브 승인/비승인
+      description: |
+        - 요구사항: REQ-FUNC-011
+        - 화면: SCR-ADMIN-001
+        - 테이블: solution_archive
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: solutionId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_published]
+              properties:
+                is_published: { type: boolean }
+      responses:
+        '200':
+          description: 처리 성공
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Solution' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    CaseId:
+      name: caseId
+      in: path
+      required: true
+      schema: { type: integer }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: integer }
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [staff, expert, admin] }
+        org_id: { type: integer, nullable: true }
+        status: { type: string, enum: [active, suspended] }
+        created_at: { type: string, format: date-time }
+
+    Category:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+
+    Case:
+      type: object
+      properties:
+        id: { type: integer }
+        requester_id: { type: integer }
+        category_id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        status:
+          type: string
+          enum: [등록, 매칭요청, 매칭완료, 상담중, 해결, 종료]
+        created_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time, nullable: true }
+
+    Attachment:
+      type: object
+      properties:
+        id: { type: integer }
+        case_id: { type: integer }
+        file_url: { type: string }
+        file_name: { type: string }
+
+    Match:
+      type: object
+      properties:
+        id: { type: integer }
+        case_id: { type: integer }
+        expert_id: { type: integer }
+        status: { type: string, enum: [요청, 수락, 거절, 완료] }
+        requested_at: { type: string, format: date-time }
+        responded_at: { type: string, format: date-time, nullable: true }
+
+    Session:
+      type: object
+      properties:
+        id: { type: integer }
+        match_id: { type: integer }
+        remote_tool: { type: string, enum: [이지헬프, AnyDesk, Zoom, 기타], nullable: true }
+        access_code: { type: string, nullable: true }
+        status: { type: string, enum: [대기, 진행중, 완료, 취소] }
+        memo: { type: string, nullable: true }
+        started_at: { type: string, format: date-time, nullable: true }
+        ended_at: { type: string, format: date-time, nullable: true }
+
+    Review:
+      type: object
+      properties:
+        id: { type: integer }
+        session_id: { type: integer }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    Solution:
+      type: object
+      properties:
+        id: { type: integer }
+        category_id: { type: integer }
+        title: { type: string }
+        content: { type: string }
+        is_published: { type: boolean }
+        view_count: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    Error:
+      type: object
+      properties:
+        code: { type: integer }
+        message: { type: string }
+
+  responses:
+    BadRequest:
+      description: 잘못된 요청
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: 인증 실패
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: 접근 권한 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: 리소스를 찾을 수 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
