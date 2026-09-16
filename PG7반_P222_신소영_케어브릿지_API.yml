@@ -1,20 +1,26 @@
 openapi: 3.0.3
 info:
   title: 케어브릿지 (CareBridge) API
-  description: 장기요양기관 실무자 원격 업무지원 매칭 플랫폼 API 명세
-  version: 1.0.0
+  description: |
+    장기요양기관 실무자 원격 업무지원 매칭 플랫폼 API 명세.
+    2026-09-16 기준 실제 구현(backend/app) 내용에 맞춰 갱신.
+    구현하지 않은 기능(조직/전문가 프로필/알림, 관리자 회원·카테고리 관리)은
+    문서 맨 아래 "구현 범위" 절 참고.
+  version: 1.1.0
 servers:
-  - url: https://api.carebridge.io/v1
+  - url: http://localhost:8000
 
 tags:
   - name: Auth
   - name: Users
   - name: Categories
   - name: Cases
+  - name: Attachments
   - name: Matches
   - name: Sessions
   - name: Solutions
   - name: Admin
+  - name: Manual
 
 paths:
   /auth/signup:
@@ -33,18 +39,23 @@ paths:
               type: object
               required: [name, email, password, role]
               properties:
-                name: { type: string, example: "박민지" }
+                name: { type: string, example: "홍길동" }
                 email: { type: string, format: email }
-                password: { type: string, format: password }
+                password: { type: string, format: password, minLength: 8 }
                 role: { type: string, enum: [staff, expert] }
-                org_id: { type: integer, nullable: true }
+                org_name: { type: string, nullable: true, description: "기관담당자 소속 기관명" }
       responses:
         '201':
           description: 가입 성공
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/User' }
+              schema: { $ref: '#/components/schemas/TokenResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: 이미 가입된 이메일
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /auth/login:
     post:
@@ -65,15 +76,11 @@ paths:
                 email: { type: string, format: email }
                 password: { type: string, format: password }
       responses:
-        '200':
-          description: 로그인 성공
+        '201':
+          description: 로그인 성공 (액세스 토큰 발급)
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  token: { type: string }
-                  user: { $ref: '#/components/schemas/User' }
+              schema: { $ref: '#/components/schemas/TokenResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
   /users/me:
@@ -92,13 +99,16 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /users/me/nickname:
     put:
       tags: [Users]
-      summary: 내 프로필 수정
+      summary: 내 별명 등록/변경
       description: |
-        - 요구사항: REQ-FUNC-002
+        - 구현 범위: 요구사항정의서 외 추가 기능
         - 화면: SCR-MY-001
-        - 테이블: users, expert_profiles, expert_categories
+        - 테이블: users
+        - 숙련자 전용. 기관담당자가 숙련자를 선택할 때 실명 대신 이 별명이 우선 노출된다.
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
@@ -107,47 +117,50 @@ paths:
             schema:
               type: object
               properties:
-                name: { type: string }
-                phone: { type: string }
-                bio: { type: string, description: "숙련자 전용" }
-                category_ids:
-                  type: array
-                  items: { type: integer }
-                  description: "숙련자 전문분야"
+                nickname: { type: string, maxLength: 30, nullable: true }
       responses:
         '200':
-          description: 수정 성공
+          description: 저장 성공
           content:
             application/json:
               schema: { $ref: '#/components/schemas/User' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
-  /users/me/cases:
-    get:
+  /users/me/org-name:
+    put:
       tags: [Users]
-      summary: 내 케이스/활동 이력 조회
+      summary: 소속 기관 등록/변경
       description: |
-        - 요구사항: REQ-FUNC-009
+        - 구현 범위: 요구사항정의서 외 추가 기능
         - 화면: SCR-MY-001
-        - 테이블: cases, matches
+        - 테이블: users
+        - 기관담당자 전용.
       security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                org_name: { type: string, maxLength: 100, nullable: true }
       responses:
         '200':
-          description: 조회 성공
+          description: 저장 성공
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/Case' }
+              schema: { $ref: '#/components/schemas/User' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /categories:
     get:
       tags: [Categories]
       summary: 카테고리 목록 조회
       description: |
-        - 요구사항: REQ-FUNC-003, REQ-FUNC-013
-        - 화면: SCR-CASE-001, SCR-ADMIN-001
+        - 요구사항: REQ-FUNC-003
+        - 화면: SCR-CASE-001
         - 테이블: categories
       responses:
         '200':
@@ -157,6 +170,79 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Category' }
+
+  /experts:
+    get:
+      tags: [Categories]
+      summary: 매칭 요청 대상 숙련자 목록 조회
+      description: |
+        - 구현 범위: 요구사항정의서 외 추가 기능 (REQ-FUNC-005 매칭 요청 화면에서 사용)
+        - 화면: SCR-CASE-002
+        - 테이블: users, expert_categories, reviews
+        - category_id로 필터링하면 해당 분야를 전문분야로 등록한 숙련자만 반환한다.
+        - 리뷰 평균 평점을 매너온도 스타일 지표(temperature)로 계산해 함께 내려준다.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: category_id
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ExpertCandidate' }
+
+  /users/me/categories:
+    get:
+      tags: [Categories]
+      summary: 내 전문분야 조회 (숙련자)
+      description: |
+        - 구현 범위: 요구사항정의서 외 추가 기능
+        - 화면: SCR-MY-001
+        - 테이블: expert_categories
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      tags: [Categories]
+      summary: 내 전문분야 등록/변경 (숙련자)
+      description: |
+        - 구현 범위: 요구사항정의서 외 추가 기능
+        - 화면: SCR-MY-001
+        - 테이블: expert_categories
+        - 전체 목록을 교체(replace-all)하는 방식이다.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_ids]
+              properties:
+                category_ids:
+                  type: array
+                  items: { type: integer }
+      responses:
+        '200':
+          description: 저장 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /cases:
     post:
@@ -186,21 +272,17 @@ paths:
               schema: { $ref: '#/components/schemas/Case' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
     get:
       tags: [Cases]
-      summary: 케이스 목록 조회
+      summary: 케이스 목록 조회 (본인 케이스/활동 이력)
       description: |
-        - 요구사항: REQ-FUNC-003
-        - 화면: SCR-MAIN-001
-        - 테이블: cases
+        - 요구사항: REQ-FUNC-003, REQ-FUNC-009
+        - 화면: SCR-MAIN-001, SCR-MY-001
+        - 테이블: cases, matches, solution_archive
+        - 기관담당자는 본인이 등록한 케이스, 숙련자는 본인이 매칭된 케이스,
+          관리자는 전체 케이스를 반환한다.
       security: [{ bearerAuth: [] }]
-      parameters:
-        - name: status
-          in: query
-          schema: { type: string }
-        - name: category_id
-          in: query
-          schema: { type: integer }
       responses:
         '200':
           description: 조회 성공
@@ -217,7 +299,8 @@ paths:
       description: |
         - 요구사항: REQ-FUNC-004
         - 화면: SCR-CASE-002
-        - 테이블: cases, attachments
+        - 테이블: cases, attachments, solution_archive, matches
+        - 같은 카테고리의 승인된 해결 사례를 최대 5건 related_solutions로 함께 내려준다.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CaseId'
@@ -229,42 +312,33 @@ paths:
               schema: { $ref: '#/components/schemas/Case' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-    put:
+    delete:
       tags: [Cases]
-      summary: 케이스 수정
+      summary: 케이스 완전 삭제
       description: |
-        - 요구사항: REQ-FUNC-003
-        - 화면: SCR-CASE-002
-        - 테이블: cases
+        - 구현 범위: 요구사항정의서 외 추가 기능
+        - 화면: SCR-MY-001
+        - 테이블: cases, attachments, matches, consult_sessions, reviews, solution_archive
+        - 본인이 등록한 케이스만 삭제 가능. 매칭·세션·리뷰·첨부파일까지 함께 삭제된다.
+          단, 이미 승인되어 공개된 해결 사례는 삭제하지 않고 원본 케이스 연결만 끊는다.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CaseId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                title: { type: string }
-                description: { type: string }
       responses:
-        '200':
-          description: 수정 성공
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Case' }
+        '204':
+          description: 삭제 성공
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /cases/{caseId}/attachments:
     post:
-      tags: [Cases]
+      tags: [Attachments]
       summary: 케이스 첨부사진 업로드
       description: |
         - 요구사항: REQ-FUNC-014
         - 화면: SCR-CASE-001
         - 테이블: attachments
+        - 케이스당 최대 5장, jpg/png/gif/webp만 허용, 파일당 5MB 제한.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CaseId'
@@ -278,7 +352,6 @@ paths:
                 files:
                   type: array
                   items: { type: string, format: binary }
-                  maxItems: 5
       responses:
         '201':
           description: 업로드 성공
@@ -288,6 +361,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Attachment' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /cases/{caseId}/matches:
@@ -297,16 +371,32 @@ paths:
       description: |
         - 요구사항: REQ-FUNC-005
         - 화면: SCR-CASE-002
-        - 테이블: matches
+        - 테이블: matches, expert_categories
+        - 선택한 숙련자가 해당 카테고리를 전문분야로 등록하지 않았으면 400을 반환한다.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expert_id]
+              properties:
+                expert_id: { type: integer }
       responses:
         '201':
           description: 매칭 요청 생성
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Match' }
+        '400':
+          description: 존재하지 않는 숙련자이거나, 선택한 카테고리가 전문분야로 등록되어 있지 않음
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
           description: 이미 매칭이 진행 중인 케이스
@@ -331,6 +421,26 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/Match' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /matches:
+    get:
+      tags: [Matches]
+      summary: 매칭 요청함 조회 (숙련자에게 들어온 요청 전체)
+      description: |
+        - 요구사항: REQ-FUNC-006
+        - 화면: SCR-MATCH-001
+        - 테이블: matches
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Match' }
 
   /matches/{matchId}:
     put:
@@ -340,21 +450,19 @@ paths:
         - 요구사항: REQ-FUNC-006
         - 화면: SCR-MATCH-001
         - 테이블: matches, consult_sessions
+        - 수락 시 상담 세션(대기 상태)이 자동 생성된다.
       security: [{ bearerAuth: [] }]
       parameters:
-        - name: matchId
-          in: path
-          required: true
-          schema: { type: integer }
+        - $ref: '#/components/parameters/MatchId'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [status]
+              required: [action]
               properties:
-                status: { type: string, enum: [수락, 거절] }
+                action: { type: string, enum: [accept, reject] }
       responses:
         '200':
           description: 처리 성공
@@ -368,28 +476,28 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
-
-  /matches/{matchId}/sessions:
-    post:
-      tags: [Sessions]
-      summary: 상담 세션 생성
+    delete:
+      tags: [Matches]
+      summary: 매칭 요청 삭제 (기관담당자, 요청 상태만)
       description: |
-        - 요구사항: REQ-FUNC-007
-        - 화면: SCR-SESSION-001
-        - 테이블: consult_sessions
+        - 구현 범위: 요구사항정의서 외 추가 기능
+        - 화면: SCR-MY-001
+        - 테이블: matches
+        - 숙련자가 아직 수락/거절하지 않은 요청만 취소할 수 있다.
+          삭제 시 케이스 상태는 "등록"으로 되돌아간다.
       security: [{ bearerAuth: [] }]
       parameters:
-        - name: matchId
-          in: path
-          required: true
-          schema: { type: integer }
+        - $ref: '#/components/parameters/MatchId'
       responses:
-        '201':
-          description: 세션 생성 성공
+        '204':
+          description: 삭제 성공
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 이미 처리된 매칭 요청은 삭제 불가
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Session' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: '#/components/schemas/Error' }
 
   /sessions/{sessionId}:
     get:
@@ -414,9 +522,12 @@ paths:
       tags: [Sessions]
       summary: 세션 상태 변경 (원격지원 도구·접속코드 등록/시작/종료)
       description: |
-        - 요구사항: REQ-FUNC-007
+        - 요구사항: REQ-FUNC-007, REQ-FUNC-008
         - 화면: SCR-SESSION-001
         - 테이블: consult_sessions, cases
+        - remote_tool·access_code는 숙련자만 입력할 수 있다.
+        - status를 진행중으로 바꾸려면 remote_tool·access_code가 먼저 채워져 있어야 한다.
+        - status를 완료로 바꾸면 케이스 상태가 "해결"로 바뀐다.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/SessionId'
@@ -427,9 +538,9 @@ paths:
             schema:
               type: object
               properties:
-                remote_tool: { type: string, enum: [이지헬프, AnyDesk, Zoom, 기타] }
+                remote_tool: { type: string, enum: [이지헬프, 헬프컴, 구글원격, 기타] }
                 access_code: { type: string, maxLength: 20 }
-                status: { type: string, enum: [진행중, 완료, 취소] }
+                status: { type: string, enum: [진행중, 완료] }
                 memo: { type: string }
       responses:
         '200':
@@ -438,7 +549,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Session' }
         '400':
-          description: 원격지원 도구·접속코드 미입력 상태로 시작 시도
+          description: 원격지원 도구·접속코드 미입력 상태로 시작 시도, 또는 허용되지 않는 상태 전이
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -452,7 +563,8 @@ paths:
       description: |
         - 요구사항: REQ-FUNC-008
         - 화면: SCR-SESSION-001
-        - 테이블: reviews, cases
+        - 테이블: reviews
+        - 세션이 완료 상태일 때만, 케이스 요청자 본인이 1회 등록할 수 있다.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/SessionId'
@@ -473,6 +585,13 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Review' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 이미 평가가 등록된 세션
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /solutions:
     get:
@@ -482,6 +601,8 @@ paths:
         - 요구사항: REQ-FUNC-010
         - 화면: SCR-ARCHIVE-001, SCR-CASE-002
         - 테이블: solution_archive
+        - is_published=true인 사례만 검색 대상이며, category_id 일치 + title/content
+          키워드 포함(대소문자 무관) 조건으로 필터링한다.
       parameters:
         - name: category_id
           in: query
@@ -506,6 +627,7 @@ paths:
         - 요구사항: REQ-FUNC-010
         - 화면: SCR-ARCHIVE-001
         - 테이블: solution_archive
+        - 조회할 때마다 view_count가 1 증가한다.
       parameters:
         - name: solutionId
           in: path
@@ -527,6 +649,8 @@ paths:
         - 요구사항: REQ-FUNC-009
         - 화면: SCR-MY-001
         - 테이블: solution_archive
+        - 본인이 담당하고 세션이 완료된 케이스에 대해서만, 케이스당 1건만 등록할 수 있다.
+          등록 직후에는 is_published=false(승인 대기) 상태다.
       security: [{ bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CaseId'
@@ -547,16 +671,28 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Solution' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 이미 이 케이스에 등록된 해결 사례가 있음
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
-  /admin/users:
+  /admin/solutions:
     get:
       tags: [Admin]
-      summary: 전체 회원 조회 (관리자)
+      summary: 사례 검수 목록 조회 (관리자)
       description: |
-        - 요구사항: REQ-FUNC-012
-        - 화면: SCR-ADMIN-001
-        - 테이블: users
+        - 요구사항: REQ-FUNC-011
+        - 화면: SCR-ADMIN-001 (사례 검수 탭)
+        - 테이블: solution_archive
       security: [{ bearerAuth: [] }]
+      parameters:
+        - name: is_published
+          in: query
+          schema: { type: boolean }
+          description: "false로 조회하면 승인 대기 목록"
       responses:
         '200':
           description: 조회 성공
@@ -564,74 +700,16 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { $ref: '#/components/schemas/User' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-
-  /admin/users/{userId}/status:
-    put:
-      tags: [Admin]
-      summary: 회원 상태 변경 (활성/정지)
-      description: |
-        - 요구사항: REQ-FUNC-012
-        - 화면: SCR-ADMIN-001
-        - 테이블: users
-      security: [{ bearerAuth: [] }]
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema: { type: integer }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [status]
-              properties:
-                status: { type: string, enum: [active, suspended] }
-      responses:
-        '200':
-          description: 변경 성공
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/User' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-
-  /admin/categories:
-    post:
-      tags: [Admin]
-      summary: 카테고리 등록 (관리자)
-      description: |
-        - 요구사항: REQ-FUNC-013
-        - 화면: SCR-ADMIN-001
-        - 테이블: categories
-      security: [{ bearerAuth: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string, maxLength: 50 }
-                description: { type: string, maxLength: 200 }
-      responses:
-        '201':
-          description: 등록 성공
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Category' }
+                items: { $ref: '#/components/schemas/Solution' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /admin/solutions/{solutionId}/publish:
     put:
       tags: [Admin]
-      summary: 사례 아카이브 승인/비승인
+      summary: 사례 아카이브 승인/비승인 (관리자)
       description: |
         - 요구사항: REQ-FUNC-011
-        - 화면: SCR-ADMIN-001
+        - 화면: SCR-ADMIN-001 (사례 검수 탭)
         - 테이블: solution_archive
       security: [{ bearerAuth: [] }]
       parameters:
@@ -655,6 +733,54 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Solution' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /manual/chat:
+    post:
+      tags: [Manual]
+      summary: 매뉴얼 챗봇 질의
+      description: |
+        - 구현 범위: 요구사항정의서 외 추가 기능 (RAG 기반 매뉴얼 챗봇)
+        - 화면: SCR-MANUAL-001
+        - 테이블: 없음 (PostgreSQL 미사용 — LlamaIndex 벡터 인덱스만 조회)
+        - 2025년 장기요양기관 시설급여 평가 매뉴얼을 LlamaIndex + OpenAI로
+          인덱싱해 답변과 근거 문서 청크를 함께 반환한다. 대화 맥락은
+          로그인 사용자별로 서버에 유지된다.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string }
+      responses:
+        '201':
+          description: 응답 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  answer: { type: string }
+                  sources:
+                    type: array
+                    items: { type: string }
+
+  /manual/reset:
+    post:
+      tags: [Manual]
+      summary: 매뉴얼 챗봇 대화 기록 초기화
+      description: |
+        - 구현 범위: 요구사항정의서 외 추가 기능
+        - 화면: SCR-MANUAL-001
+        - 테이블: 없음 (PostgreSQL 미사용)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204':
+          description: 초기화 성공
 
 components:
   securitySchemes:
@@ -669,6 +795,11 @@ components:
       in: path
       required: true
       schema: { type: integer }
+    MatchId:
+      name: matchId
+      in: path
+      required: true
+      schema: { type: integer }
     SessionId:
       name: sessionId
       in: path
@@ -676,14 +807,22 @@ components:
       schema: { type: integer }
 
   schemas:
+    TokenResponse:
+      type: object
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, example: bearer }
+        user: { $ref: '#/components/schemas/User' }
+
     User:
       type: object
       properties:
         id: { type: integer }
-        name: { type: string }
-        email: { type: string, format: email }
         role: { type: string, enum: [staff, expert, admin] }
-        org_id: { type: integer, nullable: true }
+        name: { type: string }
+        nickname: { type: string, nullable: true }
+        email: { type: string, format: email }
+        org_name: { type: string, nullable: true }
         status: { type: string, enum: [active, suspended] }
         created_at: { type: string, format: date-time }
 
@@ -692,48 +831,94 @@ components:
       properties:
         id: { type: integer }
         name: { type: string }
-        description: { type: string }
+        description: { type: string, nullable: true }
+
+    ExpertCandidate:
+      type: object
+      description: 매칭 요청 대상 숙련자 후보 (GET /experts 응답)
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        nickname: { type: string, nullable: true }
+        temperature:
+          type: number
+          format: float
+          description: "매너온도 스타일 숙련도 지표. 기준값 36.5, 리뷰 없으면 36.5"
+        review_count: { type: integer }
+
+    Attachment:
+      type: object
+      properties:
+        id: { type: integer }
+        file_url: { type: string }
+        file_name: { type: string }
+        uploaded_at: { type: string, format: date-time }
+
+    SolutionSummary:
+      type: object
+      description: 케이스 상세의 related_solutions 항목
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        view_count: { type: integer }
 
     Case:
       type: object
       properties:
         id: { type: integer }
         requester_id: { type: integer }
-        category_id: { type: integer }
+        category: { $ref: '#/components/schemas/Category' }
         title: { type: string }
         description: { type: string }
         status:
           type: string
-          enum: [등록, 매칭요청, 매칭완료, 상담중, 해결, 종료]
+          enum: [등록, 매칭요청, 상담중, 해결]
         created_at: { type: string, format: date-time }
         resolved_at: { type: string, format: date-time, nullable: true }
-
-    Attachment:
-      type: object
-      properties:
-        id: { type: integer }
-        case_id: { type: integer }
-        file_url: { type: string }
-        file_name: { type: string }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        related_solutions:
+          type: array
+          items: { $ref: '#/components/schemas/SolutionSummary' }
+        has_solution:
+          type: boolean
+          description: 이 케이스로 등록된 해결 사례가 이미 있는지 여부
+        active_match_id:
+          type: integer
+          nullable: true
+          description: 처리 대기 중(요청 상태)인 매칭 ID. 없으면 null
 
     Match:
       type: object
       properties:
         id: { type: integer }
         case_id: { type: integer }
+        case_title: { type: string }
+        case_description: { type: string }
         expert_id: { type: integer }
-        status: { type: string, enum: [요청, 수락, 거절, 완료] }
+        expert_display_name:
+          type: string
+          description: 숙련자 별명(있으면) 또는 실명
+        status: { type: string, enum: [요청, 수락, 거절] }
         requested_at: { type: string, format: date-time }
         responded_at: { type: string, format: date-time, nullable: true }
+        session_id:
+          type: integer
+          nullable: true
+          description: 수락되어 세션이 생성된 경우에만 값이 채워진다.
 
     Session:
       type: object
       properties:
         id: { type: integer }
         match_id: { type: integer }
-        remote_tool: { type: string, enum: [이지헬프, AnyDesk, Zoom, 기타], nullable: true }
+        case_id: { type: integer }
+        expert_id: { type: integer }
+        requester_id: { type: integer }
+        remote_tool: { type: string, enum: [이지헬프, 헬프컴, 구글원격, 기타], nullable: true }
         access_code: { type: string, nullable: true }
-        status: { type: string, enum: [대기, 진행중, 완료, 취소] }
+        status: { type: string, enum: [대기, 진행중, 완료] }
         memo: { type: string, nullable: true }
         started_at: { type: string, format: date-time, nullable: true }
         ended_at: { type: string, format: date-time, nullable: true }
@@ -743,6 +928,7 @@ components:
       properties:
         id: { type: integer }
         session_id: { type: integer }
+        rater_id: { type: integer }
         rating: { type: integer, minimum: 1, maximum: 5 }
         comment: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
@@ -751,18 +937,19 @@ components:
       type: object
       properties:
         id: { type: integer }
-        category_id: { type: integer }
+        category: { $ref: '#/components/schemas/Category' }
+        source_case_id: { type: integer, nullable: true }
         title: { type: string }
         content: { type: string }
         is_published: { type: boolean }
         view_count: { type: integer }
+        created_by: { type: integer }
         created_at: { type: string, format: date-time }
 
     Error:
       type: object
       properties:
-        code: { type: integer }
-        message: { type: string }
+        detail: { type: string }
 
   responses:
     BadRequest:
@@ -785,3 +972,19 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+
+# ---------------------------------------------------------------------------
+# 구현 범위 (2026-09-16 기준)
+# ---------------------------------------------------------------------------
+# 이번 구현에서 제외한 것 — DB.dbml에는 있으나 API/화면 모두 미구현:
+#   - organizations, expert_profiles, notifications 테이블
+#   - 관리자 회원 관리(GET /admin/users, PUT /admin/users/{id}/status)
+#   - 관리자 카테고리 관리(POST /admin/categories)
+#   - 상담 세션 개별 생성 API(POST /matches/{matchId}/sessions)
+#     → 매칭 수락(PUT /matches/{matchId}) 시 서버가 자동 생성하는 방식으로 대체
+# 요구사항정의서에는 없지만 이번에 추가로 구현한 것:
+#   - GET /experts (매너온도 스타일 숙련도 + 별명 포함 숙련자 후보 목록)
+#   - GET/PUT /users/me/categories (숙련자 전문분야 등록)
+#   - PUT /users/me/nickname (숙련자 별명 등록/변경)
+#   - GET /matches, DELETE /matches/{matchId} (매칭 요청함 조회, 요청 취소)
+#   - GET /admin/solutions (관리자 사례 검수 목록)

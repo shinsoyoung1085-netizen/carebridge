@@ -8,7 +8,7 @@ from ..schemas import ChatRequest, ChatResponse
 router = APIRouter(prefix="/manual", tags=["manual-chat"])
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse, status_code=201)
 def chat(payload: ChatRequest, current_user: User = Depends(get_current_user)):
     engine = get_engine(current_user.id)
     result = engine.chat(payload.message)

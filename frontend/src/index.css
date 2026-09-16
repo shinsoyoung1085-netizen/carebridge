@@ -229,6 +229,16 @@ h1 {
   border: 1px solid var(--line);
 }
 
+.btn-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+}
+
 .btn-small {
   padding: 6px 12px;
   font-size: 12.5px;
@@ -530,6 +540,12 @@ textarea {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-soft);
+}
+
+.hint-text-sm {
+  font-size: 12px;
+  color: var(--ink-faint);
+  margin: 0 0 4px;
 }
 
 .hint-text {

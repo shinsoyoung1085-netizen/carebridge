@@ -51,6 +51,52 @@ function NicknameEditor() {
   );
 }
 
+function OrgNameEditor() {
+  const { user, setUser } = useAuth();
+  const [orgName, setOrgName] = React.useState(user?.org_name ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    setError(null);
+    try {
+      const updated = await api.put<User>("/users/me/org-name", { org_name: orgName.trim() || null });
+      setUser(updated);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "소속 기관 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2 className="section-title-sm">소속 기관</h2>
+      <p className="page-sub">상단바와 프로필에 표시되는 소속 기관명이에요.</p>
+      <div className="nickname-row">
+        <input
+          value={orgName}
+          onChange={(e) => {
+            setOrgName(e.target.value);
+            setSaved(false);
+          }}
+          maxLength={100}
+          placeholder="예: 햇살요양원"
+        />
+        <button className="btn btn-primary btn-small" onClick={save} disabled={saving}>
+          {saving ? "저장 중..." : "저장"}
+        </button>
+      </div>
+      {saved && <span className="saved-hint">저장됐습니다</span>}
+      {error && <p className="form-error">{error}</p>}
+    </div>
+  );
+}
+
 function ExpertiseEditor() {
   const [all, setAll] = React.useState<Category[]>([]);
   const [selected, setSelected] = React.useState<Set<number>>(new Set());
@@ -110,10 +156,20 @@ function ExpertiseEditor() {
   );
 }
 
-function SolutionRegisterForm({ caseId, onDone }: { caseId: number; onDone: () => void }) {
+function SolutionRegisterForm({
+  caseId,
+  caseTitle,
+  initialContent,
+  onDone,
+}: {
+  caseId: number;
+  caseTitle: string;
+  initialContent: string;
+  onDone: () => void;
+}) {
   const [open, setOpen] = React.useState(false);
-  const [title, setTitle] = React.useState("");
-  const [content, setContent] = React.useState("");
+  const [title, setTitle] = React.useState(caseTitle);
+  const [content, setContent] = React.useState(initialContent);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -142,6 +198,7 @@ function SolutionRegisterForm({ caseId, onDone }: { caseId: number; onDone: () =
 
   return (
     <form onSubmit={submit} className="stack-form solution-form">
+      <p className="hint-text-sm">케이스 제목과 상담 메모(해결 내용)를 불러왔어요. 필요한 대로 고쳐서 등록하세요.</p>
       <label htmlFor={`sol-title-${caseId}`}>사례 제목</label>
       <input id={`sol-title-${caseId}`} value={title} onChange={(e) => setTitle(e.target.value)} required />
       <label htmlFor={`sol-content-${caseId}`}>해결 내용</label>
@@ -165,11 +222,76 @@ function SolutionRegisterForm({ caseId, onDone }: { caseId: number; onDone: () =
   );
 }
 
+function CaseRow({
+  c,
+  user,
+  busyMatchId,
+  busyDeleteCaseId,
+  onDeleteMatch,
+  onDeleteCase,
+  onSolutionDone,
+}: {
+  c: Case;
+  user: { role: string } | null;
+  busyMatchId: number | null;
+  busyDeleteCaseId: number | null;
+  onDeleteMatch: (matchId: number) => void;
+  onDeleteCase: (caseId: number) => void;
+  onSolutionDone: () => void;
+}) {
+  return (
+    <li>
+      <div className="case-row">
+        <Link to={`/cases/${c.id}`}>
+          <div className="case-title">{c.title}</div>
+          <div className="case-meta">
+            {c.category.name} · {new Date(c.created_at).toLocaleDateString("ko-KR")}
+          </div>
+        </Link>
+        <div className="case-row-actions">
+          <StatusBadge status={c.status} />
+          {user?.role === "staff" && c.status === "매칭요청" && c.active_match_id && (
+            <button
+              className="btn btn-ghost btn-small"
+              onClick={() => onDeleteMatch(c.active_match_id!)}
+              disabled={busyMatchId === c.active_match_id}
+            >
+              {busyMatchId === c.active_match_id ? "삭제 중..." : "매칭요청 삭제"}
+            </button>
+          )}
+          {user?.role === "staff" && (
+            <button
+              className="btn btn-ghost btn-small btn-danger"
+              onClick={() => onDeleteCase(c.id)}
+              disabled={busyDeleteCaseId === c.id}
+            >
+              {busyDeleteCaseId === c.id ? "삭제 중..." : "케이스 삭제"}
+            </button>
+          )}
+          {user?.role === "expert" && c.status === "해결" && (
+            c.has_solution ? (
+              <span className="solution-registered-hint">사례 등록됨</span>
+            ) : (
+              <SolutionRegisterForm
+                caseId={c.id}
+                caseTitle={c.title}
+                initialContent={c.session_memo ?? c.description}
+                onDone={onSolutionDone}
+              />
+            )
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 export function MyPage() {
   const { user } = useAuth();
   const [cases, setCases] = React.useState<Case[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [busyMatchId, setBusyMatchId] = React.useState<number | null>(null);
+  const [busyDeleteCaseId, setBusyDeleteCaseId] = React.useState<number | null>(null);
 
   const load = React.useCallback(() => {
     api.get<Case[]>("/cases").then(setCases).catch(() => {});
@@ -178,6 +300,19 @@ export function MyPage() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  const pendingMatchCases = React.useMemo(
+    () => (user?.role === "staff" ? (cases ?? []).filter((c) => c.status === "매칭요청") : []),
+    [cases, user]
+  );
+  const inProgressCases = React.useMemo(
+    () => (cases ?? []).filter((c) => c.status === "상담중"),
+    [cases]
+  );
+  const otherCases = React.useMemo(
+    () => (cases ?? []).filter((c) => !pendingMatchCases.includes(c) && !inProgressCases.includes(c)),
+    [cases, pendingMatchCases, inProgressCases]
+  );
 
   async function deleteMatchRequest(matchId: number) {
     if (!window.confirm("매칭 요청을 삭제할까요? 케이스는 다시 매칭 요청 가능한 상태로 돌아갑니다.")) return;
@@ -193,6 +328,25 @@ export function MyPage() {
     }
   }
 
+  async function deleteCase(caseId: number) {
+    if (
+      !window.confirm(
+        "케이스를 완전히 삭제할까요? 매칭·상담 기록까지 전부 삭제되고 되돌릴 수 없습니다."
+      )
+    )
+      return;
+    setError(null);
+    setBusyDeleteCaseId(caseId);
+    try {
+      await api.del(`/cases/${caseId}`);
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "케이스 삭제에 실패했습니다.");
+    } finally {
+      setBusyDeleteCaseId(null);
+    }
+  }
+
   return (
     <div className="page">
       <h1>마이페이지</h1>
@@ -201,6 +355,8 @@ export function MyPage() {
         {user?.name}님의 케이스·활동 이력
       </p>
 
+      {user?.role === "staff" && <OrgNameEditor />}
+
       {user?.role === "expert" && (
         <>
           <NicknameEditor />
@@ -208,42 +364,63 @@ export function MyPage() {
         </>
       )}
 
-      <h2 className="section-title">케이스 이력</h2>
       {error && <p className="form-error">{error}</p>}
       {!cases && <p className="page-loading">불러오는 중...</p>}
       {cases && cases.length === 0 && <p className="empty-state">등록된 케이스가 없습니다.</p>}
 
+      {user?.role === "staff" && pendingMatchCases.length > 0 && (
+        <>
+          <h2 className="section-title">매칭 요청 중</h2>
+          <ul className="case-list">
+            {pendingMatchCases.map((c) => (
+              <CaseRow
+                key={c.id}
+                c={c}
+                user={user}
+                busyMatchId={busyMatchId}
+                busyDeleteCaseId={busyDeleteCaseId}
+                onDeleteMatch={deleteMatchRequest}
+                onDeleteCase={deleteCase}
+                onSolutionDone={load}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+
+      {inProgressCases.length > 0 && (
+        <>
+          <h2 className="section-title">상담 진행 중</h2>
+          <ul className="case-list">
+            {inProgressCases.map((c) => (
+              <CaseRow
+                key={c.id}
+                c={c}
+                user={user}
+                busyMatchId={busyMatchId}
+                busyDeleteCaseId={busyDeleteCaseId}
+                onDeleteMatch={deleteMatchRequest}
+                onDeleteCase={deleteCase}
+                onSolutionDone={load}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+
+      <h2 className="section-title">케이스 이력</h2>
       <ul className="case-list">
-        {cases?.map((c) => (
-          <li key={c.id}>
-            <div className="case-row">
-              <Link to={`/cases/${c.id}`}>
-                <div className="case-title">{c.title}</div>
-                <div className="case-meta">
-                  {c.category.name} · {new Date(c.created_at).toLocaleDateString("ko-KR")}
-                </div>
-              </Link>
-              <div className="case-row-actions">
-                <StatusBadge status={c.status} />
-                {user?.role === "staff" && c.status === "매칭요청" && c.active_match_id && (
-                  <button
-                    className="btn btn-ghost btn-small"
-                    onClick={() => deleteMatchRequest(c.active_match_id!)}
-                    disabled={busyMatchId === c.active_match_id}
-                  >
-                    {busyMatchId === c.active_match_id ? "삭제 중..." : "매칭요청 삭제"}
-                  </button>
-                )}
-                {user?.role === "expert" && c.status === "해결" && (
-                  c.has_solution ? (
-                    <span className="solution-registered-hint">사례 등록됨</span>
-                  ) : (
-                    <SolutionRegisterForm caseId={c.id} onDone={load} />
-                  )
-                )}
-              </div>
-            </div>
-          </li>
+        {otherCases.map((c) => (
+          <CaseRow
+            key={c.id}
+            c={c}
+            user={user}
+            busyMatchId={busyMatchId}
+            busyDeleteCaseId={busyDeleteCaseId}
+            onDeleteMatch={deleteMatchRequest}
+            onDeleteCase={deleteCase}
+            onSolutionDone={load}
+          />
         ))}
       </ul>
     </div>

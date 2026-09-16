@@ -55,6 +55,7 @@ export interface Case {
   related_solutions: SolutionSummary[];
   has_solution: boolean;
   active_match_id: number | null;
+  session_memo: string | null;
 }
 
 export interface Solution {

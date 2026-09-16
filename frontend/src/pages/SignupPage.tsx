@@ -84,7 +84,12 @@ export function SignupPage() {
           {role === "staff" && (
             <>
               <label htmlFor="signup-org">소속 기관</label>
-              <input id="signup-org" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+              <input
+                id="signup-org"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder="예: 햇살요양원"
+              />
             </>
           )}
 

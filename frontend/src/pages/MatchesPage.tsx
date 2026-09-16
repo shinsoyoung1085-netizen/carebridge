@@ -16,6 +16,9 @@ export function MatchesPage() {
 
   React.useEffect(() => {
     load();
+    // 기관담당자가 보낸 매칭 요청이 새로고침 없이도 바로 보이도록 주기적으로 갱신한다.
+    const interval = setInterval(load, 4000);
+    return () => clearInterval(interval);
   }, [load]);
 
   async function decide(matchId: number, action: "accept" | "reject") {

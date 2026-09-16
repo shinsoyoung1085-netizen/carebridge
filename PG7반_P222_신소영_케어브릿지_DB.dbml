@@ -1,34 +1,22 @@
 // 케어브릿지 (CareBridge) 데이터 모델
 // 장기요양기관 실무자 원격 업무지원 매칭 플랫폼
-
-Table organizations {
-  id integer [pk, increment]
-  name varchar(100) [not null]
-  biz_reg_no varchar(20) [unique, not null, note: '사업자등록번호']
-  address varchar(200)
-  phone varchar(20)
-  org_type varchar(30) [note: '요양원, 재가센터 등']
-  created_at timestamp [not null, default: `now()`]
-}
+//
+// 2026-09-16 기준 실제 구현(backend/app/models.py, PostgreSQL) 내용에 맞춰 갱신.
+// 아래 9개 테이블은 구현 완료: users, categories, expert_categories, cases,
+// attachments, matches, consult_sessions, reviews, solution_archive
+// organizations, expert_profiles, notifications 3개는 이번 구현 범위에서 제외
+// (테이블 정의는 향후 확장을 위해 남겨두되 [미구현]으로 표시, users와의 FK도 연결 안 함)
 
 Table users {
   id integer [pk, increment]
-  org_id integer [ref: > organizations.id, note: '숙련자는 null 가능']
   role varchar(20) [not null, note: 'staff(기관담당자) / expert(숙련자) / admin(관리자)']
   name varchar(50) [not null]
+  nickname varchar(30) [note: '숙련자가 직접 등록/변경. 매칭 선택 화면에 실명 대신 노출']
   email varchar(100) [unique, not null]
-  password_hash varchar(255) [not null, note: '단방향 해시. 원문 저장 금지 (REQ-NFN-002)']
-  phone varchar(20)
+  password_hash varchar(255) [not null, note: '단방향 해시(bcrypt). 원문 저장 금지 (REQ-NFN-002)']
+  org_name varchar(100) [note: '기관담당자 소속 기관명. organizations 테이블 미구현으로 문자열로 단순화']
   status varchar(20) [not null, default: 'active', note: 'active / suspended']
   created_at timestamp [not null, default: `now()`]
-}
-
-Table expert_profiles {
-  user_id integer [pk, ref: - users.id]
-  bio text
-  career_years integer
-  rating_avg decimal(3,2) [default: 0]
-  review_count integer [default: 0]
 }
 
 Table categories {
@@ -53,7 +41,7 @@ Table cases {
   category_id integer [ref: > categories.id]
   title varchar(100) [not null]
   description text [not null]
-  status varchar(20) [not null, default: '등록', note: '등록/매칭요청/매칭완료/상담중/해결/종료']
+  status varchar(20) [not null, default: '등록', note: '등록/매칭요청/상담중/해결']
   created_at timestamp [not null, default: `now()`]
   resolved_at timestamp
 }
@@ -62,7 +50,7 @@ Table attachments {
   id integer [pk, increment]
   case_id integer [ref: > cases.id]
   file_url varchar(255) [not null]
-  file_name varchar(100) [not null, note: 'REQ-FUNC-014 케이스 첨부사진']
+  file_name varchar(100) [not null, note: 'REQ-FUNC-014 케이스 첨부사진, 케이스당 최대 5장']
   uploaded_at timestamp [not null, default: `now()`]
 }
 
@@ -70,17 +58,17 @@ Table matches {
   id integer [pk, increment]
   case_id integer [ref: > cases.id]
   expert_id integer [ref: > users.id]
-  status varchar(20) [not null, default: '요청', note: '요청/수락/거절/완료 (REQ-FUNC-006)']
+  status varchar(20) [not null, default: '요청', note: '요청/수락/거절 (REQ-FUNC-006)']
   requested_at timestamp [not null, default: `now()`]
   responded_at timestamp
 }
 
 Table consult_sessions {
   id integer [pk, increment]
-  match_id integer [ref: > matches.id]
-  remote_tool varchar(30) [note: '이지헬프(ezHelp) / AnyDesk / Zoom 등 (REQ-FUNC-007)']
+  match_id integer [ref: - matches.id, note: '매칭 1건당 세션 1건']
+  remote_tool varchar(30) [note: '이지헬프 / 헬프컴 / 구글원격 / 기타 (REQ-FUNC-007)']
   access_code varchar(20) [note: '숙련자가 발급한 원격지원 접속코드']
-  status varchar(20) [not null, default: '대기', note: '대기/진행중/완료/취소']
+  status varchar(20) [not null, default: '대기', note: '대기/진행중/완료']
   memo text
   started_at timestamp
   ended_at timestamp
@@ -90,7 +78,7 @@ Table reviews {
   id integer [pk, increment]
   session_id integer [ref: - consult_sessions.id]
   rater_id integer [ref: > users.id, note: '기관담당자 (REQ-FUNC-008)']
-  rating integer [not null, note: '1~5']
+  rating integer [not null, note: '1~5. GET /experts의 매너온도 지표 계산에도 사용']
   comment varchar(500)
   created_at timestamp [not null, default: `now()`]
 }
@@ -98,13 +86,39 @@ Table reviews {
 Table solution_archive {
   id integer [pk, increment]
   category_id integer [ref: > categories.id]
-  source_case_id integer [ref: > cases.id, note: '원본 케이스, 수기 등록시 null 가능 (REQ-FUNC-009)']
+  source_case_id integer [ref: > cases.id, note: '원본 케이스, 수기 등록시 null 가능 (REQ-FUNC-009). 케이스당 1건만 허용']
   title varchar(100) [not null]
   content text [not null]
   is_published boolean [not null, default: false, note: '관리자 승인 여부 (REQ-FUNC-011)']
   view_count integer [not null, default: 0]
   created_by integer [ref: > users.id]
   created_at timestamp [not null, default: `now()`]
+}
+
+// ---------------------------------------------------------------------------
+// 아래 3개 테이블은 [미구현] — 정의만 남겨두고 users 등과 FK 연결하지 않음
+// ---------------------------------------------------------------------------
+
+Table organizations {
+  id integer [pk, increment]
+  name varchar(100) [not null]
+  biz_reg_no varchar(20) [unique, not null, note: '사업자등록번호']
+  address varchar(200)
+  phone varchar(20)
+  org_type varchar(30) [note: '요양원, 재가센터 등']
+  created_at timestamp [not null, default: `now()`]
+
+  Note: '[미구현] users.org_name(문자열)으로 단순화되어 사용 중'
+}
+
+Table expert_profiles {
+  user_id integer [pk]
+  bio text
+  career_years integer
+  rating_avg decimal(3,2) [default: 0]
+  review_count integer [default: 0]
+
+  Note: '[미구현] rating_avg/review_count는 저장 대신 GET /experts에서 reviews를 매번 집계해 계산'
 }
 
 Table notifications {
@@ -114,4 +128,6 @@ Table notifications {
   content varchar(200) [not null]
   is_read boolean [not null, default: false]
   created_at timestamp [not null, default: `now()`]
+
+  Note: '[미구현]'
 }

@@ -21,7 +21,9 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24시간
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-bearer_scheme = HTTPBearer()
+# auto_error=False로 꺼야 토큰이 아예 없을 때도 FastAPI 기본값(403)이 아니라
+# 아래에서 직접 401을 던질 수 있다 (REQ 평가기준: 미인증=401).
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(plain_password: str) -> str:
@@ -39,13 +41,15 @@ def create_access_token(user_id: int) -> str:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="인증 정보가 유효하지 않습니다.",
     )
+    if credentials is None:
+        raise unauthorized
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))

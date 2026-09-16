@@ -26,6 +26,10 @@ class NicknameUpdate(BaseModel):
     nickname: str | None = Field(default=None, max_length=30)
 
 
+class OrgNameUpdate(BaseModel):
+    org_name: str | None = Field(default=None, max_length=100)
+
+
 class SignupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     email: EmailStr
@@ -107,6 +111,7 @@ class CaseOut(BaseModel):
     related_solutions: list[SolutionSummary] = []
     has_solution: bool = False
     active_match_id: int | None = None
+    session_memo: str | None = None
 
 
 # ---------- Match ----------
