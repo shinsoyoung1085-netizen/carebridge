@@ -1,0 +1,29 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+# Render 대시보드에서 "New > Blueprint"로 이 저장소를 연결하면 백엔드 웹 서비스가 생성됩니다.
+# 프런트엔드는 Vercel에 별도로 배포합니다(frontend/vercel.json).
+#
+# 무료 구성:
+# - DB는 Supabase 무료 Postgres를 쓴다. Render 무료 DB는 30일 후 정지된다.
+# - 무료 웹 서비스는 15분 무활동 시 잠들고, 영구 디스크가 없어 첨부 사진이 재배포 때 사라진다.
+#   사용자가 생기면 plan: starter + disk(mountPath: /srv/uploads)로 올린다.
+
+services:
+  - type: web
+    name: carebridge-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Supabase → Connect → Session pooler 주소 (Render는 IPv4만 지원)
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false  # Vercel 배포 주소 (예: https://carebridge.vercel.app)
+      - key: BACKUP_ENABLED
+        value: "false"  # Supabase 자체 백업을 사용한다
