@@ -4,6 +4,7 @@ sqlalchemy
 psycopg2-binary
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt==4.0.1  # passlib 1.7은 bcrypt 4.1+와 호환되지 않아 로그인·회원가입이 500이 난다
 email-validator
 python-multipart
 python-dotenv
