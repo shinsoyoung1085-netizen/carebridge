@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,9 +14,16 @@ from .seed import seed_categories
 
 app = FastAPI(title="Carebridge API", version="0.1.0")
 
+# 쉼표로 구분한 프런트엔드 주소 목록. 예: "https://carebridge.vercel.app,http://localhost:5173"
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -39,7 +48,9 @@ def on_startup():
     with SessionLocal() as db:
         seed_categories(db)
     init_index()  # 매뉴얼 인덱스를 미리 로딩해 첫 챗봇 요청 지연을 없앤다
-    app.state.backup_scheduler = start_backup_scheduler()  # REQ-NFN-004
+    # REQ-NFN-004. 관리형 DB 자체 백업을 쓰는 운영 환경에서는 BACKUP_ENABLED=false로 끈다.
+    if os.getenv("BACKUP_ENABLED", "true").lower() != "false":
+        app.state.backup_scheduler = start_backup_scheduler()
 
 
 @app.on_event("shutdown")

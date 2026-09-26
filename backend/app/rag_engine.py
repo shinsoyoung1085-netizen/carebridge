@@ -25,9 +25,10 @@ from llama_index.llms.openai import OpenAI
 
 load_dotenv(override=True)  # 셸에 이미 설정된 OPENAI_API_KEY보다 .env 값을 우선한다
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_ROOT / "data"
-STORAGE_DIR = PROJECT_ROOT / "storage"
+# backend/app/rag_engine.py -> parents[1] == backend/
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+DATA_DIR = BACKEND_DIR / "data"
+STORAGE_DIR = BACKEND_DIR / "storage"
 
 LLM_MODEL = "gpt-4o-mini"
 EMBED_MODEL = "text-embedding-3-small"

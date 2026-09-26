@@ -16,10 +16,9 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
 
-load_dotenv(override=True)
+from .database import DATABASE_URL
 
 BACKUP_DIR = Path(__file__).resolve().parents[1] / "backups"
 BACKUP_TABLES = ["cases", "consult_sessions", "solution_archive"]
@@ -46,8 +45,7 @@ def _pg_dump_command(output_path: Path) -> list[str]:
     호스트·유저가 비어있으면 로컬 소켓/peer 인증(지금 개발 환경)을 그대로
     쓰도록 해당 플래그를 생략한다.
     """
-    database_url = os.getenv("DATABASE_URL", "postgresql+psycopg2://localhost/carebridge")
-    url = make_url(database_url)
+    url = make_url(DATABASE_URL)
 
     cmd = ["pg_dump", "--no-owner", "--no-privileges"]
     if url.host:
@@ -93,7 +91,12 @@ def run_backup() -> Path:
     cmd = _pg_dump_command(output_path)
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300)
+        # 원격 DB는 비밀번호 인증이라 pg_dump에 PGPASSWORD로 넘겨준다(커맨드라인에 노출하지 않음).
+        env = os.environ.copy()
+        password = make_url(DATABASE_URL).password
+        if password:
+            env["PGPASSWORD"] = password
+        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=300, env=env)
     except subprocess.CalledProcessError as exc:
         logger.error("백업 실패 (pg_dump 종료코드 %s): %s", exc.returncode, exc.stderr)
         raise

@@ -15,7 +15,7 @@ frontend/dist/
 *.log
 
 # Runtime / generated data (재생성 가능)
-storage/
+# backend/storage/(RAG 인덱스)는 배포 시 임베딩 재생성 비용을 피하려고 커밋한다.
 backend/uploads/
 backend/backups/
 

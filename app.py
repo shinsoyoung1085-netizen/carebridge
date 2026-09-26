@@ -4,7 +4,7 @@
 
 import streamlit as st
 
-from rag_engine import RAGEngine, load_index
+from backend.app.rag_engine import RAGEngine, load_index
 
 st.set_page_config(
     page_title="장기요양기관 평가 매뉴얼 챗봇",

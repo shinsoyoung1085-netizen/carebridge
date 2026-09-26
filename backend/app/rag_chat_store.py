@@ -1,20 +1,12 @@
 """
 매뉴얼 RAG 챗봇을 FastAPI 프로세스에 통합하기 위한 얇은 어댑터.
 
-rag_engine.py(프로젝트 루트, Streamlit 데모에서 쓰던 것과 동일 모듈)를
-그대로 재사용한다. 인덱스는 프로세스 시작 시 한 번만 로딩하고,
+rag_engine.py(Streamlit 데모 app.py에서도 같은 모듈을 쓴다)를 그대로
+재사용한다. 인덱스는 프로세스 시작 시 한 번만 로딩하고,
 사용자별 대화 맥락(memory)은 user_id를 키로 하는 RAGEngine 인스턴스로 분리한다.
 """
 
-import sys
-from pathlib import Path
-
-# rag_engine.py는 backend/ 상위(프로젝트 루트)에 있다.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from rag_engine import RAGEngine, load_index  # noqa: E402
+from .rag_engine import RAGEngine, load_index
 
 _index = None
 _engines: dict[int, RAGEngine] = {}
