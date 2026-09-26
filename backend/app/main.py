@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from .backup import start_backup_scheduler
 from .database import Base, SessionLocal, engine
 from .models import *  # noqa: F401,F403 — Base.metadata에 테이블 등록
 from .rag_chat_store import init_index
@@ -38,6 +39,14 @@ def on_startup():
     with SessionLocal() as db:
         seed_categories(db)
     init_index()  # 매뉴얼 인덱스를 미리 로딩해 첫 챗봇 요청 지연을 없앤다
+    app.state.backup_scheduler = start_backup_scheduler()  # REQ-NFN-004
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    scheduler = getattr(app.state, "backup_scheduler", None)
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
 
 
 @app.get("/health")

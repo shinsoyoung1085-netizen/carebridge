@@ -17,6 +17,7 @@ frontend/dist/
 # Runtime / generated data (재생성 가능)
 storage/
 backend/uploads/
+backend/backups/
 
 # OS
 .DS_Store

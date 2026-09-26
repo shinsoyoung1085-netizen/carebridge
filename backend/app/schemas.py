@@ -30,6 +30,10 @@ class OrgNameUpdate(BaseModel):
     org_name: str | None = Field(default=None, max_length=100)
 
 
+class UserStatusUpdate(BaseModel):
+    status: UserStatus
+
+
 class SignupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     email: EmailStr
@@ -61,6 +65,16 @@ class CategoryOut(BaseModel):
 
 class ExpertCategoriesUpdate(BaseModel):
     category_ids: list[int]
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    description: str | None = Field(default=None, max_length=200)
+
+
+class CategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=50)
+    description: str | None = Field(default=None, max_length=200)
 
 
 class ExpertCandidate(BaseModel):

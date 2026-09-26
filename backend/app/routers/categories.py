@@ -4,8 +4,24 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import Category, ConsultSession, ExpertCategory, Match, Review, User, UserRole
-from ..schemas import CategoryOut, ExpertCandidate, ExpertCategoriesUpdate
+from ..models import (
+    Case,
+    Category,
+    ConsultSession,
+    ExpertCategory,
+    Match,
+    Review,
+    SolutionArchive,
+    User,
+    UserRole,
+)
+from ..schemas import (
+    CategoryCreate,
+    CategoryOut,
+    CategoryUpdate,
+    ExpertCandidate,
+    ExpertCategoriesUpdate,
+)
 
 router = APIRouter(tags=["categories"])
 
@@ -104,3 +120,73 @@ def set_my_categories(
     db.commit()
 
     return sorted(categories, key=lambda c: c.id)
+
+
+@router.post("/admin/categories", response_model=CategoryOut, status_code=201)
+def create_category(
+    payload: CategoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    if db.query(Category).filter(Category.name == payload.name).first():
+        raise HTTPException(status_code=409, detail="이미 존재하는 카테고리명입니다.")
+
+    category = Category(name=payload.name, description=payload.description)
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+@router.put("/admin/categories/{category_id}", response_model=CategoryOut)
+def update_category(
+    category_id: int,
+    payload: CategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    category = db.get(Category, category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="요청하신 정보를 찾을 수 없습니다.")
+
+    if payload.name is not None and payload.name != category.name:
+        if db.query(Category).filter(Category.name == payload.name).first():
+            raise HTTPException(status_code=409, detail="이미 존재하는 카테고리명입니다.")
+        category.name = payload.name
+    if payload.description is not None:
+        category.description = payload.description
+
+    db.commit()
+    db.refresh(category)
+    return category
+
+
+@router.delete("/admin/categories/{category_id}", status_code=204)
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    category = db.get(Category, category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="요청하신 정보를 찾을 수 없습니다.")
+
+    in_use = (
+        db.query(Case).filter(Case.category_id == category_id).first() is not None
+        or db.query(ExpertCategory).filter(ExpertCategory.category_id == category_id).first() is not None
+        or db.query(SolutionArchive).filter(SolutionArchive.category_id == category_id).first() is not None
+    )
+    if in_use:
+        raise HTTPException(status_code=409, detail="사용 중인 카테고리는 삭제할 수 없습니다.")
+
+    db.delete(category)
+    db.commit()

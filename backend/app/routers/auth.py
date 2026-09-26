@@ -1,10 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..auth import create_access_token, get_current_user, hash_password, verify_password
 from ..database import get_db
-from ..models import User, UserRole
-from ..schemas import LoginRequest, NicknameUpdate, OrgNameUpdate, SignupRequest, TokenResponse, UserOut
+from ..models import User, UserRole, UserStatus
+from ..schemas import (
+    LoginRequest,
+    NicknameUpdate,
+    OrgNameUpdate,
+    SignupRequest,
+    TokenResponse,
+    UserOut,
+    UserStatusUpdate,
+)
 
 router = APIRouter(tags=["auth"])
 
@@ -72,3 +80,43 @@ def update_org_name(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.get("/admin/users", response_model=list[UserOut])
+def list_admin_users(
+    role: UserRole | None = Query(default=None),
+    status_filter: UserStatus | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    query = db.query(User)
+    if role is not None:
+        query = query.filter(User.role == role)
+    if status_filter is not None:
+        query = query.filter(User.status == status_filter)
+    return query.order_by(User.id).all()
+
+
+@router.put("/admin/users/{user_id}/status", response_model=UserOut)
+def update_user_status(
+    user_id: int,
+    payload: UserStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="요청하신 정보를 찾을 수 없습니다.")
+    if target.id == current_user.id and payload.status == UserStatus.suspended:
+        raise HTTPException(status_code=400, detail="본인 계정은 정지할 수 없습니다.")
+
+    target.status = payload.status
+    db.commit()
+    db.refresh(target)
+    return target
