@@ -24,6 +24,6 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: CORS_ORIGINS
-        sync: false  # Vercel 배포 주소 (예: https://carebridge.vercel.app)
+        value: https://carebridge-one-sage.vercel.app  # Vercel 프로덕션 주소
       - key: BACKUP_ENABLED
         value: "false"  # Supabase 자체 백업을 사용한다
