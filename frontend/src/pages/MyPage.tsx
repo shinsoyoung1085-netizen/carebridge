@@ -5,6 +5,201 @@ import type { Case, Category, User } from "../api/types";
 import { useAuth } from "../context/AuthContext";
 import { StatusBadge } from "../components/StatusBadge";
 
+function NameEditor() {
+  const { user, setUser } = useAuth();
+  const [name, setName] = React.useState(user?.name ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSaved(false);
+    setError(null);
+    try {
+      const updated = await api.put<User>("/users/me/name", { name: name.trim() });
+      setUser(updated);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "이름 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save}>
+      <label htmlFor="account-name">이름</label>
+      <div className="nickname-row">
+        <input
+          id="account-name"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setSaved(false);
+          }}
+          maxLength={50}
+          required
+        />
+        <button type="submit" className="btn btn-primary btn-small" disabled={saving || !name.trim()}>
+          {saving ? "저장 중..." : "저장"}
+        </button>
+      </div>
+      {saved && <span className="saved-hint">저장됐습니다</span>}
+      {error && <p className="form-error">{error}</p>}
+    </form>
+  );
+}
+
+function EmailEditor() {
+  const { user, setUser } = useAuth();
+  const [email, setEmail] = React.useState(user?.email ?? "");
+  const [password, setPassword] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSaved(false);
+    setError(null);
+    try {
+      const updated = await api.put<User>("/users/me/email", {
+        email: email.trim(),
+        current_password: password,
+      });
+      setUser(updated);
+      setPassword("");
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "이메일 변경에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save} className="stack-form">
+      <label htmlFor="account-email">이메일 (로그인 아이디)</label>
+      <input
+        id="account-email"
+        type="email"
+        value={email}
+        onChange={(e) => {
+          setEmail(e.target.value);
+          setSaved(false);
+        }}
+        required
+      />
+      <label htmlFor="account-email-password">현재 비밀번호</label>
+      <input
+        id="account-email-password"
+        type="password"
+        autoComplete="current-password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        required
+      />
+      {error && <p className="form-error">{error}</p>}
+      <div>
+        <button type="submit" className="btn btn-primary btn-small" disabled={saving || email.trim() === user?.email}>
+          {saving ? "변경 중..." : "이메일 변경"}
+        </button>
+        {saved && <span className="saved-hint">변경됐습니다. 다음 로그인부터 새 이메일을 사용하세요.</span>}
+      </div>
+    </form>
+  );
+}
+
+function PasswordEditor() {
+  const [current, setCurrent] = React.useState("");
+  const [next, setNext] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSaved(false);
+    setError(null);
+    if (next.length < 8) {
+      setError("새 비밀번호는 8자 이상이어야 합니다.");
+      return;
+    }
+    if (next !== confirm) {
+      setError("새 비밀번호가 서로 일치하지 않습니다.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.put("/users/me/password", { current_password: current, new_password: next });
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "비밀번호 변경에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save} className="stack-form">
+      <label htmlFor="account-current-password">현재 비밀번호</label>
+      <input
+        id="account-current-password"
+        type="password"
+        autoComplete="current-password"
+        value={current}
+        onChange={(e) => setCurrent(e.target.value)}
+        required
+      />
+      <label htmlFor="account-new-password">새 비밀번호 (8자 이상)</label>
+      <input
+        id="account-new-password"
+        type="password"
+        autoComplete="new-password"
+        value={next}
+        onChange={(e) => setNext(e.target.value)}
+        minLength={8}
+        maxLength={100}
+        required
+      />
+      <label htmlFor="account-confirm-password">새 비밀번호 확인</label>
+      <input
+        id="account-confirm-password"
+        type="password"
+        autoComplete="new-password"
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        required
+      />
+      {error && <p className="form-error">{error}</p>}
+      <div>
+        <button type="submit" className="btn btn-primary btn-small" disabled={saving}>
+          {saving ? "변경 중..." : "비밀번호 변경"}
+        </button>
+        {saved && <span className="saved-hint">변경됐습니다</span>}
+      </div>
+    </form>
+  );
+}
+
+function AccountEditor() {
+  return (
+    <div className="card">
+      <h2 className="section-title-sm">계정 정보</h2>
+      <NameEditor />
+      <EmailEditor />
+      <PasswordEditor />
+    </div>
+  );
+}
+
 function NicknameEditor() {
   const { user, setUser } = useAuth();
   const [nickname, setNickname] = React.useState(user?.nickname ?? "");
@@ -354,6 +549,8 @@ export function MyPage() {
         {user?.org_name ? `${user.org_name} · ` : ""}
         {user?.name}님의 케이스·활동 이력
       </p>
+
+      <AccountEditor />
 
       {user?.role === "staff" && <OrgNameEditor />}
 

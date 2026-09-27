@@ -5,9 +5,12 @@ from ..auth import create_access_token, get_current_user, hash_password, verify_
 from ..database import get_db
 from ..models import User, UserRole, UserStatus
 from ..schemas import (
+    EmailUpdate,
     LoginRequest,
+    NameUpdate,
     NicknameUpdate,
     OrgNameUpdate,
+    PasswordUpdate,
     SignupRequest,
     TokenResponse,
     UserOut,
@@ -52,6 +55,51 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 @router.get("/users/me", response_model=UserOut)
 def read_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.put("/users/me/name", response_model=UserOut)
+def update_name(
+    payload: NameUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="이름을 입력하세요.")
+    current_user.name = name
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.put("/users/me/email", response_model=UserOut)
+def update_email(
+    payload: EmailUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 이메일은 로그인 아이디라, 토큰만 탈취돼도 계정을 가로챌 수 없도록 현재 비밀번호를 확인한다
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="현재 비밀번호가 올바르지 않습니다.")
+    if payload.email != current_user.email:
+        if db.query(User).filter(User.email == payload.email).first():
+            raise HTTPException(status_code=409, detail="이미 가입된 이메일입니다.")
+        current_user.email = payload.email
+        db.commit()
+        db.refresh(current_user)
+    return current_user
+
+
+@router.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def update_password(
+    payload: PasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="현재 비밀번호가 올바르지 않습니다.")
+    current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
 
 
 @router.put("/users/me/nickname", response_model=UserOut)
