@@ -10,9 +10,13 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+psycopg2://localhost/carebridge",
 )
-# Render·Heroku 등은 "postgres://" 형식으로 주는데 SQLAlchemy는 이를 인식하지 못한다.
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+# Render·Heroku는 "postgres://", Supabase는 드라이버 없는 "postgresql://" 형식으로 준다.
+# SQLAlchemy 2.1부터 드라이버 미지정 시 psycopg(v3)를 기본으로 쓰는데, 설치된 건 psycopg2라
+# 드라이버를 명시해 둔다.
+for prefix in ("postgres://", "postgresql://"):
+    if DATABASE_URL.startswith(prefix):
+        DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len(prefix):]
+        break
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
