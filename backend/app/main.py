@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import FastAPI
@@ -11,6 +12,8 @@ from .rag_chat_store import init_index
 from .routers import attachments, auth, categories, cases, manual_chat, matches, sessions, solutions
 from .routers.attachments import UPLOAD_DIR
 from .seed import seed_categories
+
+logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="Carebridge API", version="0.1.0")
 
@@ -44,10 +47,14 @@ app.include_router(manual_chat.router)
 
 @app.on_event("startup")
 def on_startup():
+    # 배포 환경에서 기동이 어느 단계에서 멈추는지 로그로 바로 알 수 있게 단계별로 남긴다.
+    logger.info("DB 접속: %s", engine.url.render_as_string(hide_password=True))
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         seed_categories(db)
+    logger.info("DB 준비 완료, 매뉴얼 인덱스 로딩 시작")
     init_index()  # 매뉴얼 인덱스를 미리 로딩해 첫 챗봇 요청 지연을 없앤다
+    logger.info("매뉴얼 인덱스 로딩 완료")
     # REQ-NFN-004. 관리형 DB 자체 백업을 쓰는 운영 환경에서는 BACKUP_ENABLED=false로 끈다.
     if os.getenv("BACKUP_ENABLED", "true").lower() != "false":
         app.state.backup_scheduler = start_backup_scheduler()

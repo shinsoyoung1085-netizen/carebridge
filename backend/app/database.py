@@ -20,7 +20,8 @@ for prefix in ("postgres://", "postgresql://"):
         DATABASE_URL = "postgresql+psycopg2://" + DATABASE_URL[len(prefix):]
         break
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+# 접속이 막힌 환경(예: IPv6 전용 주소)에서 기동이 무한정 멈추지 않도록 접속 대기를 제한한다.
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, connect_args={"connect_timeout": 10})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
