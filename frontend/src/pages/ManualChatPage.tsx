@@ -115,7 +115,7 @@ export function ManualChatPage() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="궁금한 내용을 입력하세요 (예: 평가 주기는 어떻게 되나요?)"
+          placeholder="궁금한 내용을 입력하세요 (예: 목욕은 한 달에 몇 번 해야 하나요?)"
         />
         <button type="submit" className="btn btn-primary" disabled={sending || !input.trim()}>
           전송
