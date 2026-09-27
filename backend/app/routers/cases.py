@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..auth import get_current_user
 from ..database import get_db
@@ -47,7 +47,13 @@ def create_case(
 
 @router.get("/cases", response_model=list[CaseOut])
 def list_cases(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    query = db.query(Case)
+    # 케이스마다 category·attachments·matches→session을 개별 조회하던 N+1을 묶음 조회로 바꾼다.
+    # (배포 서버와 DB가 멀어 쿼리 1회당 왕복 지연이 커서 목록 응답이 수 초씩 걸렸다)
+    query = db.query(Case).options(
+        selectinload(Case.category),
+        selectinload(Case.attachments),
+        selectinload(Case.matches).selectinload(Match.session),
+    )
     if current_user.role == UserRole.staff:
         query = query.filter(Case.requester_id == current_user.id)
     elif current_user.role == UserRole.expert:
