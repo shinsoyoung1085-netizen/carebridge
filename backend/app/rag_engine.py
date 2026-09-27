@@ -103,13 +103,16 @@ class RAGEngine:
             chat_mode="context",
             memory=self.memory,
             system_prompt=SYSTEM_PROMPT,
-            similarity_top_k=3,
+            # 매뉴얼에 같은 절이 중복 수록돼 상위 3개 중 2개가 같은 내용인 경우가 많아
+            # 정답 조항이 검색에서 빠졌다. 후보를 넓혀 재현율을 높인다.
+            similarity_top_k=6,
         )
 
     def chat(self, query: str) -> ChatResult:
         """질의에 대한 답변과, 답변 근거로 참조된 문서 청크 원문을 반환한다."""
         response = self.chat_engine.chat(query)
-        sources = [node.get_content().strip() for node in response.source_nodes]
+        # 중복 수록된 절이 근거 목록에 반복 노출되지 않도록 순서를 유지한 채 중복 제거
+        sources = list(dict.fromkeys(node.get_content().strip() for node in response.source_nodes))
         return {"answer": str(response).strip(), "sources": sources}
 
     def reset(self) -> None:
