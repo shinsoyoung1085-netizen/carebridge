@@ -48,6 +48,22 @@ SYSTEM_PROMPT = (
 )
 
 
+NOT_IN_MANUAL = "매뉴얼에 나와있지 않은 내용입니다."
+
+# 답변 생성 후 한 번 더 확인하는 검증 프롬프트. 프롬프트 규칙만으로는 gpt-4o-mini가
+# "평가 방법"을 "평가 주기"로 답하는 식의 대상 혼동을 완전히 막지 못해 별도 판정 단계를 둔다.
+GROUNDING_CHECK_PROMPT = (
+    "다음은 사용자 질문, 챗봇 답변, 답변의 근거로 검색된 매뉴얼 발췌입니다.\n"
+    "아래 두 조건을 모두 만족하면 YES, 하나라도 만족하지 않으면 NO로 판정하세요.\n"
+    "(1) 답변이 질문이 묻는 바(무엇의 주기·횟수·기준·절차인지)에 실제로 답한다.\n"
+    "(2) 답변의 핵심 내용이 발췌에 명시돼 있다.\n"
+    "질문의 대상과 답변이 다루는 대상이 다르면(예: 평가 '주기'를 물었는데 평가 '방법'을 답함) NO입니다.\n"
+    "YES 또는 NO 한 단어로만 답하세요.\n\n"
+    "[질문]\n{query}\n\n[답변]\n{answer}\n\n[발췌]\n{context}"
+)
+MAX_CHECK_CONTEXT_CHARS = 8000
+
+
 class ChatResult(TypedDict):
     answer: str
     sources: list[str]
@@ -113,7 +129,21 @@ class RAGEngine:
         response = self.chat_engine.chat(query)
         # 중복 수록된 절이 근거 목록에 반복 노출되지 않도록 순서를 유지한 채 중복 제거
         sources = list(dict.fromkeys(node.get_content().strip() for node in response.source_nodes))
-        return {"answer": str(response).strip(), "sources": sources}
+        answer = str(response).strip()
+        if not self._is_grounded(query, answer, sources):
+            answer = NOT_IN_MANUAL
+        return {"answer": answer, "sources": sources}
+
+    @staticmethod
+    def _is_grounded(query: str, answer: str, sources: list[str]) -> bool:
+        """답변이 질문에 실제로 답하고 발췌에 근거하는지 LLM으로 한 번 더 판정한다."""
+        if answer.startswith(NOT_IN_MANUAL.rstrip(".")) or not sources:
+            return True  # 이미 거절한 답변은 검증할 필요가 없다
+        context = "\n---\n".join(sources)[:MAX_CHECK_CONTEXT_CHARS]
+        verdict = Settings.llm.complete(
+            GROUNDING_CHECK_PROMPT.format(query=query, answer=answer, context=context)
+        )
+        return str(verdict).strip().upper().startswith("YES")
 
     def reset(self) -> None:
         """대화 기록(메모리)을 초기화한다."""
