@@ -891,33 +891,41 @@ textarea {
   margin-top: 18px;
 }
 
-.guest-box {
+.demo-box {
   margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
   text-align: center;
 }
 
-.guest-title {
+.demo-title {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-soft);
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 
-.guest-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.guest-buttons .btn {
-  flex: 1;
-}
-
-.guest-note {
+.demo-account {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
   font-size: 12px;
   color: var(--ink-soft);
-  margin: 10px 0 0;
+  cursor: pointer;
+}
+
+.demo-account:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.demo-note {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 8px 0 0;
 }
 
 .role-toggle {

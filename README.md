@@ -43,7 +43,9 @@ CareBridge는 화면공유·원격제어를 직접 만들지 않습니다. 기�
 
 ## 3. Product Demo — 실제 결과물
 
-- **배포 서비스:** https://carebridge-one-sage.vercel.app (로그인 화면의 **회원가입 없이 구경하기**로 기관담당자 또는 숙련자 계정을 바로 체험할 수 있습니다. 공용 체험 계정이라 개인정보는 입력하지 마세요.)
+- **배포 서비스:** https://carebridge-one-sage.vercel.app (로그인 화면에 체험용 계정이 표시됩니다. 공용 계정이라 개인정보는 입력하지 마세요.)
+  - 기관담당자: `demo.staff@carebridge.app` / `carebridge1234`
+  - 숙련자: `demo.expert@carebridge.app` / `carebridge1234`
 - 화면별 설계와 호출 API는 [화면설계서](PG7반_P222_신소영_케어브릿지_개요_텍스트.md)의 SCR-AUTH · MAIN · CASE · MATCH · SESSION · ARCHIVE · MY · ADMIN · MANUAL 항목에 있습니다.
 
 <!-- TODO: 저장소에는 실제 화면 캡처 파일이 없습니다. 아래 순서로 캡처해 docs/screenshots/ 에 넣고 이 위치에 연결하세요.

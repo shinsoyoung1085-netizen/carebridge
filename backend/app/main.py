@@ -11,7 +11,7 @@ from .models import *  # noqa: F401,F403 — Base.metadata에 테이블 등록
 from .rag_chat_store import init_index
 from .routers import attachments, auth, categories, cases, manual_chat, matches, sessions, solutions
 from .routers.attachments import UPLOAD_DIR
-from .seed import seed_categories
+from .seed import seed_categories, seed_demo_accounts
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -52,6 +52,7 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         seed_categories(db)
+        seed_demo_accounts(db)
     logger.info("DB 준비 완료, 매뉴얼 인덱스 로딩 시작")
     init_index()  # 매뉴얼 인덱스를 미리 로딩해 첫 챗봇 요청 지연을 없앤다
     logger.info("매뉴얼 인덱스 로딩 완료")

@@ -4,8 +4,14 @@ import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { CarebridgeLogo } from "../components/CarebridgeLogo";
 
+const DEMO_PASSWORD = "carebridge1234";
+const DEMO_ACCOUNTS = [
+  { label: "기관담당자", email: "demo.staff@carebridge.app" },
+  { label: "숙련자", email: "demo.expert@carebridge.app" },
+];
+
 export function LoginPage() {
-  const { login, guestLogin } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -21,19 +27,6 @@ export function LoginPage() {
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "로그인에 실패했습니다.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleGuest(role: "staff" | "expert") {
-    setError(null);
-    setSubmitting(true);
-    try {
-      await guestLogin(role);
-      navigate("/dashboard");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "체험 계정으로 입장하지 못했습니다.");
     } finally {
       setSubmitting(false);
     }
@@ -75,17 +68,22 @@ export function LoginPage() {
           계정이 없으신가요? <Link to="/signup">회원가입</Link>
         </p>
 
-        <div className="guest-box">
-          <p className="guest-title">회원가입 없이 구경하기</p>
-          <div className="guest-buttons">
-            <button type="button" className="btn" disabled={submitting} onClick={() => handleGuest("staff")}>
-              기관담당자로 구경
+        <div className="demo-box">
+          <p className="demo-title">체험용 계정 (클릭하면 입력됩니다)</p>
+          {DEMO_ACCOUNTS.map((a) => (
+            <button
+              key={a.email}
+              type="button"
+              className="demo-account"
+              onClick={() => {
+                setEmail(a.email);
+                setPassword(DEMO_PASSWORD);
+              }}
+            >
+              <strong>{a.label}</strong> {a.email} / {DEMO_PASSWORD}
             </button>
-            <button type="button" className="btn" disabled={submitting} onClick={() => handleGuest("expert")}>
-              숙련자로 구경
-            </button>
-          </div>
-          <p className="guest-note">공용 체험 계정입니다. 다른 방문자와 데이터가 함께 보일 수 있으니 개인정보는 입력하지 마세요.</p>
+          ))}
+          <p className="demo-note">공용 계정입니다. 개인정보는 입력하지 마세요.</p>
         </div>
       </div>
     </div>
