@@ -48,9 +48,17 @@ CareBridge는 화면공유·원격제어를 직접 만들지 않습니다. 기�
   - 숙련자: `demo.expert@carebridge.app` / `carebridge1234`
 - 화면별 설계와 호출 API는 [화면설계서](PG7반_P222_신소영_케어브릿지_개요_텍스트.md)의 SCR-AUTH · MAIN · CASE · MATCH · SESSION · ARCHIVE · MY · ADMIN · MANUAL 항목에 있습니다.
 
-<!-- TODO: 저장소에는 실제 화면 캡처 파일이 없습니다. 아래 순서로 캡처해 docs/screenshots/ 에 넣고 이 위치에 연결하세요.
-  1) 케이스 상세 + 숙련자 선택 카드(매너온도)  2) 상담 세션(접속코드 입력)  3) 사례 아카이브 검색
-  4) 매뉴얼 챗봇(답변 + 근거)  5) 마이페이지   + 케이스 등록→매칭→상담 30~60초 GIF -->
+### 화면 / Screens
+
+| 로그인과 체험 계정 | 케이스 등록 |
+|---|---|
+| ![로그인 화면](docs/screenshots/01-login.png) | ![케이스 등록 화면](docs/screenshots/03-new-case.png) |
+
+| 사례 아카이브 | 매뉴얼 Q&A 챗봇 (답변 + 근거) |
+|---|---|
+| ![사례 아카이브 화면](docs/screenshots/05-archive.png) | ![매뉴얼 챗봇 화면](docs/screenshots/04-manual-chat.png) |
+
+위 화면은 배포된 서비스에서 체험 계정으로 직접 캡처했습니다.
 
 ## 4. Key Features — 핵심 기능
 
