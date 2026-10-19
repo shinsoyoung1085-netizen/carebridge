@@ -891,6 +891,35 @@ textarea {
   margin-top: 18px;
 }
 
+.guest-box {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.guest-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: 0 0 10px;
+}
+
+.guest-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.guest-buttons .btn {
+  flex: 1;
+}
+
+.guest-note {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 10px 0 0;
+}
+
 .role-toggle {
   display: flex;
   gap: 8px;

@@ -56,6 +56,10 @@ class SignupRequest(BaseModel):
     org_name: str | None = None
 
 
+class GuestRequest(BaseModel):
+    role: UserRole
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str

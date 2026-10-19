@@ -15,6 +15,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (input: SignupInput) => Promise<void>;
+  guestLogin: (role: "staff" | "expert") => Promise<void>;
   logout: () => void;
   setUser: (user: User) => void;
 }
@@ -53,13 +54,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user);
   }, []);
 
+  const guestLogin = React.useCallback(async (role: "staff" | "expert") => {
+    const res = await api.post<{ access_token: string; user: User }>("/auth/guest", { role });
+    setToken(res.access_token);
+    setUser(res.user);
+  }, []);
+
   const logout = React.useCallback(() => {
     setToken(null);
     setUser(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout, setUser }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, guestLogin, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );

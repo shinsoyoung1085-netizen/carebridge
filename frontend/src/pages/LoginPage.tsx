@@ -5,7 +5,7 @@ import { ApiError } from "../api/client";
 import { CarebridgeLogo } from "../components/CarebridgeLogo";
 
 export function LoginPage() {
-  const { login } = useAuth();
+  const { login, guestLogin } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -21,6 +21,19 @@ export function LoginPage() {
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "로그인에 실패했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleGuest(role: "staff" | "expert") {
+    setError(null);
+    setSubmitting(true);
+    try {
+      await guestLogin(role);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "체험 계정으로 입장하지 못했습니다.");
     } finally {
       setSubmitting(false);
     }
@@ -61,6 +74,19 @@ export function LoginPage() {
         <p className="auth-switch">
           계정이 없으신가요? <Link to="/signup">회원가입</Link>
         </p>
+
+        <div className="guest-box">
+          <p className="guest-title">회원가입 없이 구경하기</p>
+          <div className="guest-buttons">
+            <button type="button" className="btn" disabled={submitting} onClick={() => handleGuest("staff")}>
+              기관담당자로 구경
+            </button>
+            <button type="button" className="btn" disabled={submitting} onClick={() => handleGuest("expert")}>
+              숙련자로 구경
+            </button>
+          </div>
+          <p className="guest-note">공용 체험 계정입니다. 다른 방문자와 데이터가 함께 보일 수 있으니 개인정보는 입력하지 마세요.</p>
+        </div>
       </div>
     </div>
   );
